@@ -48,18 +48,43 @@ def get_css(dark_mode: bool) -> str:
         <style>
             {common}
 
-            /* ===== DARK MODE OVERRIDES ===== */
+            /* ===== DARK MODE - NUCLEAR OVERRIDE ===== */
 
-            /* Main app background */
-            .stApp, [data-testid="stAppViewContainer"], .main {{
+            /* Force dark on EVERYTHING */
+            html, body, .stApp, [data-testid="stAppViewContainer"],
+            [data-testid="stAppViewContainer"] > div,
+            [data-testid="stAppViewContainer"] > div > div,
+            .main, .main > div, .block-container,
+            [data-testid="stMainBlockContainer"],
+            [data-testid="stVerticalBlock"],
+            [data-testid="stVerticalBlockBorderWrapper"],
+            [class*="stAppViewBlockContainer"],
+            [class*="block-container"] {{
                 background-color: #0f0f1a !important;
+                background: #0f0f1a !important;
             }}
 
-            .block-container {{
+            /* Bottom input area - CRITICAL FIX */
+            [data-testid="stBottom"],
+            [data-testid="stBottom"] > div,
+            [data-testid="stBottom"] [data-testid="stVerticalBlock"],
+            [data-testid="stBottomBlockContainer"],
+            [class*="stBottom"],
+            .stChatFloatingInputContainer,
+            [data-testid="stChatFloatingInputContainer"],
+            [class*="ChatInput"],
+            [class*="chatInput"] {{
                 background-color: #0f0f1a !important;
+                background: #0f0f1a !important;
             }}
 
-            /* Header text colors */
+            /* Header */
+            [data-testid="stHeader"], header, [data-testid="stToolbar"] {{
+                background-color: #0f0f1a !important;
+                background: #0f0f1a !important;
+            }}
+
+            /* Header text */
             .header-title {{
                 font-size: 2.2rem;
                 font-weight: 700;
@@ -72,60 +97,103 @@ def get_css(dark_mode: bool) -> str:
             }}
 
             /* Sidebar */
-            section[data-testid="stSidebar"] {{
+            section[data-testid="stSidebar"],
+            section[data-testid="stSidebar"] > div,
+            section[data-testid="stSidebar"] [data-testid="stVerticalBlock"],
+            [data-testid="stSidebarContent"],
+            [data-testid="stSidebarUserContent"],
+            [data-testid="stSidebarNav"] {{
                 background-color: #1a1a2e !important;
+                background: #1a1a2e !important;
             }}
-            section[data-testid="stSidebar"] .stMarkdown,
-            section[data-testid="stSidebar"] p,
-            section[data-testid="stSidebar"] span,
-            section[data-testid="stSidebar"] label {{
+
+            /* Sidebar text - all of it */
+            section[data-testid="stSidebar"] * {{
                 color: #e5e7eb !important;
+            }}
+
+            /* Sidebar buttons - VISIBLE TEXT */
+            section[data-testid="stSidebar"] button,
+            section[data-testid="stSidebar"] .stButton > button,
+            section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] {{
+                background-color: #2d2d44 !important;
+                background: #2d2d44 !important;
+                color: #ffffff !important;
+                border: 1px solid #4a4a6a !important;
+            }}
+            section[data-testid="stSidebar"] button:hover,
+            section[data-testid="stSidebar"] .stButton > button:hover {{
+                background-color: #3d3d5c !important;
+                background: #3d3d5c !important;
+                border-color: #ed8936 !important;
+            }}
+            section[data-testid="stSidebar"] button p,
+            section[data-testid="stSidebar"] button span {{
+                color: #ffffff !important;
             }}
 
             /* Chat messages */
             [data-testid="stChatMessage"] {{
                 background-color: #1e1e2e !important;
+                background: #1e1e2e !important;
                 border: 1px solid #374151 !important;
             }}
+            [data-testid="stChatMessage"] *,
             [data-testid="stChatMessageContent"],
-            [data-testid="stChatMessageContent"] p,
-            [data-testid="stChatMessageContent"] span {{
+            [data-testid="stChatMessageContent"] * {{
                 color: #e5e7eb !important;
             }}
 
-            /* Chat input */
+            /* Chat input - simple dark styling */
+            [data-testid="stChatInput"],
+            [data-testid="stChatInput"] > div {{
+                background-color: #0f0f1a !important;
+            }}
+            [data-testid="stChatInput"] [data-baseweb="textarea"],
+            [data-testid="stChatInput"] [class*="TextArea"] {{
+                background-color: #1e1e2e !important;
+                border-color: #374151 !important;
+            }}
             [data-testid="stChatInput"] textarea {{
                 background-color: #1e1e2e !important;
                 color: #e5e7eb !important;
-                border-color: #374151 !important;
             }}
-            [data-testid="stChatInput"] {{
-                background-color: #1e1e2e !important;
+            [data-testid="stChatInput"] textarea::placeholder {{
+                color: #9ca3af !important;
+            }}
+            [data-testid="stChatInput"] button {{
+                color: #ed8936 !important;
             }}
 
-            /* Buttons */
+            /* Main area buttons */
             .stButton > button {{
                 background-color: #1e1e2e !important;
+                background: #1e1e2e !important;
                 color: #e5e7eb !important;
                 border: 1px solid #374151 !important;
             }}
             .stButton > button:hover {{
                 background-color: #2d2d44 !important;
+                background: #2d2d44 !important;
                 border-color: #ed8936 !important;
                 color: #ffffff !important;
             }}
 
             /* Expander */
-            [data-testid="stExpander"] {{
+            [data-testid="stExpander"],
+            [data-testid="stExpander"] > div {{
                 background-color: #1e1e2e !important;
+                background: #1e1e2e !important;
                 border: 1px solid #374151 !important;
             }}
-            .streamlit-expanderHeader {{
+            [data-testid="stExpander"] summary,
+            [data-testid="stExpander"] summary span {{
                 color: #9ca3af !important;
-                background-color: #1e1e2e !important;
+                background-color: transparent !important;
             }}
-            .streamlit-expanderContent {{
+            [data-testid="stExpanderDetails"] {{
                 background-color: #1e1e2e !important;
+                background: #1e1e2e !important;
             }}
 
             /* Verse cards */
@@ -156,13 +224,13 @@ def get_css(dark_mode: bool) -> str:
                 display: inline-block;
             }}
 
-            /* Toggle switch */
+            /* Toggle */
             [data-testid="stToggle"] span {{
                 color: #e5e7eb !important;
             }}
 
-            /* Markdown text */
-            .stMarkdown, .stMarkdown p {{
+            /* All text defaults */
+            .stMarkdown, .stMarkdown p, .stMarkdown span {{
                 color: #e5e7eb !important;
             }}
 
@@ -175,6 +243,27 @@ def get_css(dark_mode: bool) -> str:
             [data-testid="stToast"] {{
                 background-color: #1e1e2e !important;
                 color: #e5e7eb !important;
+            }}
+
+            /* Scrollbar */
+            ::-webkit-scrollbar {{
+                width: 8px;
+                height: 8px;
+            }}
+            ::-webkit-scrollbar-track {{
+                background: #1a1a2e;
+            }}
+            ::-webkit-scrollbar-thumb {{
+                background: #4a4a6a;
+                border-radius: 4px;
+            }}
+            ::-webkit-scrollbar-thumb:hover {{
+                background: #5a5a7a;
+            }}
+
+            /* Catch-all for any remaining light backgrounds */
+            [class*="st-emotion-cache"] {{
+                background-color: transparent !important;
             }}
         </style>
         """
