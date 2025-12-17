@@ -20,9 +20,9 @@ def get_env(key: str, default: str = None) -> str:
     # Try Streamlit secrets first (for production)
     try:
         import streamlit as st
-        if key in st.secrets:
+        if hasattr(st, 'secrets') and len(st.secrets) > 0 and key in st.secrets:
             return st.secrets[key]
-    except (ImportError, AttributeError, KeyError):
+    except Exception:
         pass
 
     # Fall back to environment variables

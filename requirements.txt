@@ -1,20 +1,12 @@
 # Core dependencies
 python-dotenv>=1.0.0
 
-# Phase 1: Data Ingestion
-PyPDF2>=3.0.0
-
-# Phase 2: Embeddings & Vector Store
+# API clients
 openai>=1.0.0
 pinecone>=5.0.0
 
-# Phase 3-5: LangChain (for retrieval & response generation)
-# langchain>=0.1.0
-# langchain-openai>=0.0.5
-# langchain-pinecone>=0.0.3
+# UI
+streamlit>=1.28.0
 
-# Phase 6: UI
-# streamlit>=1.28.0
-
-# Testing
+# Testing (not needed in production but included for CI)
 pytest>=7.0.0
