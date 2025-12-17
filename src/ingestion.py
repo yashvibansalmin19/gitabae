@@ -39,7 +39,8 @@ class GitaParser:
 
     # Regex patterns
     CHAPTER_PATTERN = r'CHAPTER\s*:\s*(\d+)'
-    VERSE_NUM_PATTERN = r'॥\s*([०-९\d]+(?:\s*-\s*[०-९\d]+)?)\s*॥'
+    # Matches both verse number formats: ॥१॥ (double danda) and ।।१।। (two single dandas)
+    VERSE_NUM_PATTERN = r'(?:॥|।।)\s*([०-९\d]+(?:\s*-\s*[०-९\d]+)?)\s*(?:॥|।।)'
     TRANSLATION_PATTERN = r'\[\s*([^\]]+)\s*\]'
     SANSKRIT_PATTERN = r'[\u0900-\u097F]+'  # Devanagari Unicode range
 
