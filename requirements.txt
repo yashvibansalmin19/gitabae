@@ -1,15 +1,19 @@
-# Phase 1: Data Ingestion
-PyPDF2>=3.0.0
+# Core dependencies
 python-dotenv>=1.0.0
 
-# Phase 2: Embeddings & Vector Store (to be used later)
+# Phase 1: Data Ingestion
+PyPDF2>=3.0.0
+
+# Phase 2: Embeddings & Vector Store
+openai>=1.0.0
+pinecone>=5.0.0
+
+# Phase 3-5: LangChain (for retrieval & response generation)
 # langchain>=0.1.0
 # langchain-openai>=0.0.5
 # langchain-pinecone>=0.0.3
-# openai>=1.0.0
-# pinecone-client>=3.0.0
 
-# Phase 6: UI (to be used later)
+# Phase 6: UI
 # streamlit>=1.28.0
 
 # Testing

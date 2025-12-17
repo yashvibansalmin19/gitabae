@@ -30,15 +30,21 @@ GitaBae is an interactive Streamlit application that empowers young professional
 ```
 gitabae/
 ├── .github/
-│   └── workflows/       # GitHub Actions CI/CD
-├── .streamlit/          # Streamlit configuration
+│   └── workflows/          # GitHub Actions CI/CD
+├── .streamlit/             # Streamlit configuration
 ├── data/
-│   └── chapter_1.json   # Parsed Gita verses (Chapter 1)
+│   ├── chapter_1.json           # Parsed Gita verses
+│   ├── chapter_1_tagged.json    # Verses with LLM-generated tags
+│   └── chapter_1_embeddings.json # Vector embeddings
 ├── src/
 │   ├── __init__.py
-│   └── ingestion.py     # Data ingestion pipeline
-├── tests/               # Unit tests
-├── .env.example         # Environment variables template
+│   ├── config.py           # API configuration (OpenRouter, Pinecone)
+│   ├── ingestion.py        # Data ingestion pipeline
+│   ├── tagger.py           # LLM-based verse tagging
+│   ├── embeddings.py       # Embedding generation
+│   └── vectorstore.py      # Pinecone operations
+├── tests/                  # Unit tests
+├── .env.example            # Environment variables template
 ├── .gitignore
 ├── requirements.txt
 └── README.md
@@ -46,7 +52,7 @@ gitabae/
 
 ## Development Phases
 
-### Phase 1: Data Ingestion Pipeline (Current)
+### Phase 1: Data Ingestion Pipeline
 
 **Status: Complete**
 
@@ -55,23 +61,33 @@ gitabae/
 - [x] Hybrid chunking strategy (preserves short commentaries, splits long ones at ~400 words)
 - [x] JSON output for downstream processing
 
-**Data Schema:**
+### Phase 2: Embeddings & Vector Store
+
+**Status: Complete**
+
+- [x] LLM-based verse tagging (2-3 themes per verse using GPT-3.5-turbo)
+- [x] Generate embeddings using OpenAI text-embedding-ada-002 via OpenRouter
+- [x] Store vectors in Pinecone (47 vectors, 1536 dimensions)
+- [x] Semantic search retrieval working
+
+**Tagged Data Schema:**
 ```json
 {
   "chapter": 1,
   "verse": "1",
-  "sanskrit": "...",
-  "translation": "...",
-  "commentary": "...",
-  "tags": []
+  "sanskrit": "धृतराष्र उवाच...",
+  "translation": "Dhritrashtr said...",
+  "commentary": "Dhritrashtr is the very image of ignorance...",
+  "tags": ["dharma", "knowledge", "ego"]
 }
 ```
 
-### Phase 2: Embeddings & Vector Store (Upcoming)
-
-- [ ] Generate embeddings using OpenAI via OpenRouter
-- [ ] Store vectors in Pinecone
-- [ ] LLM-based verse tagging (2-3 themes per verse)
+**Top Tags in Chapter 1:**
+- duty (32 verses)
+- surrender (16 verses)
+- faith (11 verses)
+- knowledge (10 verses)
+- dharma (8 verses)
 
 ### Phase 3: Retrieval System (Upcoming)
 
@@ -109,7 +125,7 @@ gitabae/
 
 - Python 3.10+
 - OpenRouter API key
-- Pinecone API key
+- Pinecone API key (with index `gitabae`, 1536 dimensions, cosine metric)
 
 ### Installation
 
@@ -136,13 +152,23 @@ cp .env.example .env
 # Edit .env with your API keys
 ```
 
-### Running the Ingestion Pipeline
+### Running the Pipelines
 
+**Phase 1 - Ingestion:**
 ```bash
-python src/ingestion.py
+python -m src.ingestion
 ```
 
-This will parse the Gita text and output structured JSON to `data/chapter_1.json`.
+**Phase 2 - Tagging:**
+```bash
+python -m src.tagger
+```
+
+**Phase 2 - Embeddings & Upload:**
+```bash
+python -m src.embeddings
+python -m src.vectorstore
+```
 
 ## Configuration
 
@@ -155,6 +181,16 @@ Environment variables (see `.env.example`):
 | `PINECONE_INDEX_NAME` | Pinecone index name (default: `gitabae`) |
 | `LLM_MODEL` | LLM model to use (default: `openai/gpt-3.5-turbo`) |
 | `EMBEDDING_MODEL` | Embedding model (default: `openai/text-embedding-ada-002`) |
+
+## Sample Retrieval Results
+
+Query: *"How do I deal with anxiety and fear?"*
+
+| Rank | Verse | Score | Tags |
+|------|-------|-------|------|
+| 1 | Ch1, V30 | 0.77 | fear, anxiety, courage |
+| 2 | Ch1, V21 | 0.77 | duty, faith, surrender |
+| 3 | Ch1, V26 | 0.76 | duty, surrender, faith |
 
 ## Contributing
 
