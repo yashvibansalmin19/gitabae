@@ -22,15 +22,13 @@ from src.constants import (
 from src.styles import get_css
 from src.components import (
     render_header,
-    render_verse_card,
     render_verses_expander,
     render_feedback_buttons,
     render_sidebar_starters,
     render_sidebar_topics,
     render_sidebar_actions,
     render_sidebar_footer,
-    show_typing_indicator,
-    clear_typing_indicator,
+    render_typing_indicator,
 )
 from src.feedback import FeedbackEntry, get_feedback_storage
 from src.generator import ResponseGenerator
@@ -68,6 +66,12 @@ def init_session_state():
 
     if "pending_question" not in st.session_state:
         st.session_state.pending_question = None
+
+    if "processing" not in st.session_state:
+        st.session_state.processing = False
+
+    if "current_query" not in st.session_state:
+        st.session_state.current_query = None
 
 
 init_session_state()
@@ -201,7 +205,7 @@ for i, message in enumerate(st.session_state.messages):
             if message.get("verses"):
                 render_verses_expander(message["verses"])
 
-            # Feedback buttons with copy
+            # Feedback buttons
             if message.get("content") and len(message["content"]) > 50:
                 prev_query = ""
                 if i > 0 and st.session_state.messages[i - 1]["role"] == "user":
@@ -213,32 +217,53 @@ for i, message in enumerate(st.session_state.messages):
                     message_index=i,
                     on_positive=lambda idx=i, q=prev_query, r=message["content"]: handle_feedback(idx, "positive", q, r),
                     on_negative=lambda idx=i, q=prev_query, r=message["content"]: handle_feedback(idx, "negative", q, r),
-                    already_rated=already_rated,
-                    response_text=message["content"]
+                    already_rated=already_rated
                 )
+
+# Show typing indicator if processing (outside chat_message to avoid box)
+if st.session_state.processing:
+    render_typing_indicator()
 
 
 # =============================================================================
 # CHAT INPUT
 # =============================================================================
 
-if prompt := st.chat_input(CHAT_PLACEHOLDER):
-    # Display user message
-    with st.chat_message("user"):
-        st.markdown(prompt)
+if prompt := st.chat_input(CHAT_PLACEHOLDER, disabled=st.session_state.processing):
+    # Add user message and trigger processing
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt,
+        "verses": []
+    })
+    st.session_state.processing = True
+    st.session_state.current_query = prompt
+    st.rerun()
 
-    # Generate and display response
-    with st.chat_message("assistant"):
-        typing_placeholder = st.empty()
-        show_typing_indicator(typing_placeholder)
+# Process the query if in processing state
+if st.session_state.processing and st.session_state.current_query:
+    query = st.session_state.current_query
 
-        result = process_user_message(prompt)
+    # Generate response
+    history = get_conversation_history()
+    result = generator.generate(
+        query,
+        conversation_history=history,
+        top_k=RETRIEVAL_TOP_K,
+        min_score=RETRIEVAL_MIN_SCORE
+    )
 
-        clear_typing_indicator(typing_placeholder)
-        st.markdown(result["response"])
+    # Add response to messages
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": result["response"],
+        "verses": result["verses"]
+    })
 
-        if result["verses"]:
-            render_verses_expander(result["verses"])
+    # Clear processing state
+    st.session_state.processing = False
+    st.session_state.current_query = None
+    st.rerun()
 
 
 # =============================================================================

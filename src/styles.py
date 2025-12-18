@@ -174,27 +174,27 @@ COMMON_STYLES = """
         border-color: #ed8936;
     }
 
-    /* Typing indicator animation */
+    /* Typing indicator animation - subtle, no box */
     .typing-indicator {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 12px 16px;
-        background: linear-gradient(135deg, #f8f9fa 0%, #eef1f4 100%);
-        border-radius: 18px;
-        max-width: fit-content;
+        padding: 8px 0;
+        margin-left: 2.5rem;  /* Align with assistant message content */
+        margin-bottom: 1rem;
     }
     .typing-text {
-        color: #718096;
-        font-size: 0.9rem;
+        color: #95a5a6;
+        font-size: 0.85rem;
+        font-style: italic;
     }
     .typing-dots {
         display: flex;
-        gap: 4px;
+        gap: 3px;
     }
     .typing-dot {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         background-color: #ed8936;
         border-radius: 50%;
         animation: bounce 1.4s infinite ease-in-out both;
@@ -206,7 +206,7 @@ COMMON_STYLES = """
     @keyframes bounce {
         0%, 80%, 100% {
             transform: scale(0.6);
-            opacity: 0.5;
+            opacity: 0.4;
         }
         40% {
             transform: scale(1);
@@ -526,12 +526,12 @@ def _get_dark_mode_css(c: ColorScheme) -> str:
             color: {c.text_primary} !important;
         }}
 
-        /* Typing indicator dark mode */
+        /* Typing indicator dark mode - no background */
         .typing-indicator {{
-            background: linear-gradient(135deg, {c.bg_secondary} 0%, {c.verse_card_bg} 100%) !important;
+            background: transparent !important;
         }}
         .typing-text {{
-            color: {c.text_secondary} !important;
+            color: {c.text_muted} !important;
         }}
         .typing-dot {{
             background-color: {c.accent} !important;

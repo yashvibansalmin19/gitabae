@@ -5,6 +5,7 @@ Uses LLM to generate compassionate, wisdom-based responses.
 Integrates retrieval, safety checking, and response generation.
 """
 
+import re
 from typing import List, Optional
 
 from .config import get_openai_client, Config
@@ -23,6 +24,61 @@ from .retriever import Retriever, RetrievedVerse
 from .safety import SafetyChecker, SafetyStatus
 
 logger = get_generator_logger()
+
+# Conversational follow-up phrases that don't need verse retrieval
+FOLLOWUP_PHRASES = [
+    # Simple acknowledgments
+    "ok", "okay", "oh", "ah", "hmm", "hm", "i see", "got it", "understood",
+    "alright", "right", "sure", "fine",
+    # Gratitude
+    "thanks", "thank you", "thx",
+    # Yes/No
+    "yes", "yeah", "yep", "no", "nope", "nah",
+    # Continue prompts
+    "tell me more", "go on", "continue", "keep going", "and then",
+    "ok tell me more", "okay tell me more", "yes tell me more",
+    # Clarification requests
+    "what do you mean", "can you explain", "explain", "elaborate",
+    "what does that mean", "how so", "why is that",
+    # Reactions
+    "interesting", "nice", "cool", "wow", "great", "really", "seriously",
+    "that makes sense", "i understand",
+]
+
+
+def is_conversational_followup(query: str, has_history: bool) -> bool:
+    """
+    Detect if a query is a conversational follow-up that doesn't need verse retrieval.
+
+    Args:
+        query: User's message
+        has_history: Whether there's conversation history
+
+    Returns:
+        True if this is a simple follow-up, False if it needs verse retrieval
+    """
+    # Only consider follow-ups if there's conversation history
+    if not has_history:
+        return False
+
+    # Clean and normalize the query
+    cleaned = query.strip().lower()
+    # Remove trailing punctuation for matching
+    cleaned_no_punct = re.sub(r'[.,!?]+$', '', cleaned).strip()
+
+    # Very short messages in conversation are often follow-ups
+    if len(cleaned) > 50:
+        return False
+
+    # Check against known follow-up phrases
+    for phrase in FOLLOWUP_PHRASES:
+        if cleaned_no_punct == phrase or cleaned == phrase:
+            return True
+        # Also check if it starts with the phrase (e.g., "ok, tell me more")
+        if cleaned_no_punct.startswith(phrase + " ") or cleaned_no_punct.startswith(phrase + ","):
+            return True
+
+    return False
 
 
 class ResponseGenerator:
@@ -85,23 +141,37 @@ class ResponseGenerator:
                 "redirect_reason": safety_result.reason
             }
 
-        # Retrieve relevant verses
+        # Check if this is a conversational follow-up (no verse retrieval needed)
+        has_history = len(conversation_history) > 0
+        if is_conversational_followup(sanitized_query, has_history):
+            logger.info("Detected conversational follow-up, skipping retrieval")
+            response = self._call_llm_conversational(sanitized_query, conversation_history)
+            return {
+                "response": response,
+                "verses": [],
+                "success": True,
+                "safety_status": "safe"
+            }
+
+        # Retrieve relevant verses for substantive queries
         verses = self.retriever.retrieve(sanitized_query, top_k=top_k, min_score=min_score)
         logger.info(f"Retrieved {len(verses)} verses")
 
         if not verses:
-            logger.info("No relevant verses found")
+            # No verses found - still have a natural conversation
+            logger.info("No relevant verses found, responding conversationally")
+            response = self._call_llm_conversational(sanitized_query, conversation_history)
             return {
-                "response": NO_VERSES_MESSAGE,
+                "response": response,
                 "verses": [],
-                "success": False,
+                "success": True,
                 "safety_status": "safe"
             }
 
         # Build context from verses
         context = self._build_context(verses)
 
-        # Generate response using LLM with conversation history
+        # Generate response using LLM with verse context
         response = self._call_llm(sanitized_query, context, conversation_history)
 
         # Check output safety
@@ -138,7 +208,7 @@ Themes: {', '.join(verse.tags)}
         context: str,
         conversation_history: Optional[List[dict]] = None
     ) -> str:
-        """Call LLM to generate response with conversation context."""
+        """Call LLM to generate response with verse context."""
         if conversation_history is None:
             conversation_history = []
 
@@ -164,7 +234,45 @@ Themes: {', '.join(verse.tags)}
         messages.append({"role": "user", "content": current_message})
 
         try:
-            logger.debug(f"Calling LLM with {len(messages)} messages")
+            logger.debug(f"Calling LLM with {len(messages)} messages (with verse context)")
+            response = self.client.chat.completions.create(
+                model=Config.LLM_MODEL,
+                messages=messages,
+                temperature=LLM_TEMPERATURE,
+                max_tokens=LLM_MAX_TOKENS
+            )
+            return response.choices[0].message.content
+
+        except Exception as e:
+            logger.error(f"LLM call failed: {e}", exc_info=True)
+            return f"{CONNECTION_ERROR_MESSAGE} (Error: {str(e)[:50]})"
+
+    def _call_llm_conversational(
+        self,
+        user_query: str,
+        conversation_history: Optional[List[dict]] = None
+    ) -> str:
+        """Call LLM for natural conversation without verse context."""
+        if conversation_history is None:
+            conversation_history = []
+
+        # Build messages array with conversation history
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+        # Add recent conversation history
+        recent_history = conversation_history[-12:] if len(conversation_history) > 12 else conversation_history
+        for msg in recent_history:
+            if msg.get("role") in ["user", "assistant"]:
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+
+        # Add current query without verse context
+        messages.append({"role": "user", "content": user_query})
+
+        try:
+            logger.debug(f"Calling LLM with {len(messages)} messages (conversational, no verses)")
             response = self.client.chat.completions.create(
                 model=Config.LLM_MODEL,
                 messages=messages,

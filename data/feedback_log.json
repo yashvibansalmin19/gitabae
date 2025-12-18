@@ -1,0 +1,16 @@
+[
+  {
+    "timestamp": "2025-12-18T23:50:17.299436",
+    "message_index": 10,
+    "rating": "positive",
+    "query": "okay",
+    "response_preview": "Since it's nighttime and you can't step out, how about trying this simple breathing exercise where you are? Just a few deep breaths can bring a moment"
+  },
+  {
+    "timestamp": "2025-12-18T23:50:26.164134",
+    "message_index": 8,
+    "rating": "negative",
+    "query": "it's night i cannot take a walk right now",
+    "response_preview": "I hear you, it's nighttime and going for a walk might not be an option. Like Arjun feeling overwhelmed at the sight of his kith and kin in the Gita, i"
+  }
+]

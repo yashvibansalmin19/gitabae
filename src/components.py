@@ -90,33 +90,13 @@ def render_verses_expander(verses: List[RetrievedVerse], title: str = "See the w
 
 
 # =============================================================================
-# COPY BUTTON COMPONENT
+# TYPING INDICATOR COMPONENT
 # =============================================================================
 
-def render_copy_button(text: str, message_index: int) -> None:
-    """
-    Render a copy-to-clipboard button using JavaScript.
-
-    Args:
-        text: Text to copy to clipboard
-        message_index: Unique identifier for the button
-    """
-    # Escape text for JavaScript
-    escaped_text = text.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
-
-    copy_script = f"""
-    <button class="copy-btn" onclick="
-        navigator.clipboard.writeText(`{escaped_text}`).then(function() {{
-            this.innerHTML = '✓ Copied';
-            setTimeout(function() {{
-                document.getElementById('copy-btn-{message_index}').innerHTML = '📋 Copy';
-            }}, 2000);
-        }}.bind(this));
-    " id="copy-btn-{message_index}" title="Copy to clipboard">
-        📋 Copy
-    </button>
-    """
-    st.markdown(copy_script, unsafe_allow_html=True)
+def render_typing_indicator() -> None:
+    """Render the animated typing indicator."""
+    from .constants import TYPING_INDICATOR
+    st.markdown(TYPING_INDICATOR, unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -131,16 +111,16 @@ def render_feedback_buttons(
     response_text: str = ""
 ) -> None:
     """
-    Render thumbs up/down feedback buttons with copy option.
+    Render thumbs up/down feedback buttons.
 
     Args:
         message_index: Index of the message being rated
         on_positive: Callback when positive button clicked
         on_negative: Callback when negative button clicked
         already_rated: Whether this message was already rated
-        response_text: Text content for copy button
+        response_text: Text content (unused, kept for compatibility)
     """
-    col1, col2, col3, col4 = st.columns([1, 1, 2, 8])
+    col1, col2, col3 = st.columns([1, 1, 10])
 
     if already_rated:
         with col1:
@@ -155,11 +135,6 @@ def render_feedback_buttons(
         with col2:
             if st.button("👎", key=f"dislike_{message_index}", help="Not helpful"):
                 on_negative()
-
-    # Copy button (always shown if there's text)
-    if response_text:
-        with col3:
-            render_copy_button(response_text, message_index)
 
 
 # =============================================================================
@@ -259,7 +234,7 @@ def show_typing_indicator(placeholder) -> None:
         placeholder: Streamlit empty() placeholder
     """
     from .constants import TYPING_INDICATOR
-    placeholder.markdown(TYPING_INDICATOR)
+    placeholder.markdown(TYPING_INDICATOR, unsafe_allow_html=True)
 
 
 def clear_typing_indicator(placeholder) -> None:
