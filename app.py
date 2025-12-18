@@ -201,7 +201,7 @@ for i, message in enumerate(st.session_state.messages):
             if message.get("verses"):
                 render_verses_expander(message["verses"])
 
-            # Feedback buttons
+            # Feedback buttons with copy
             if message.get("content") and len(message["content"]) > 50:
                 prev_query = ""
                 if i > 0 and st.session_state.messages[i - 1]["role"] == "user":
@@ -213,7 +213,8 @@ for i, message in enumerate(st.session_state.messages):
                     message_index=i,
                     on_positive=lambda idx=i, q=prev_query, r=message["content"]: handle_feedback(idx, "positive", q, r),
                     on_negative=lambda idx=i, q=prev_query, r=message["content"]: handle_feedback(idx, "negative", q, r),
-                    already_rated=already_rated
+                    already_rated=already_rated,
+                    response_text=message["content"]
                 )
 
 

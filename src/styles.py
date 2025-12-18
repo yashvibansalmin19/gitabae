@@ -85,14 +85,18 @@ LIGHT_COLORS = ColorScheme(
 # =============================================================================
 
 COMMON_STYLES = """
-    /* Header container */
+    /* Header container - modern design */
     .header-container {
         text-align: center;
-        padding: 1.5rem 0 2rem 0;
+        padding: 2rem 0 2.5rem 0;
+        background: linear-gradient(180deg, transparent 0%, rgba(237, 137, 54, 0.03) 100%);
+        border-radius: 0 0 24px 24px;
+        margin-bottom: 1rem;
     }
     .logo-icon {
-        font-size: 3rem;
-        margin-bottom: 0.5rem;
+        font-size: 3.5rem;
+        margin-bottom: 0.75rem;
+        filter: drop-shadow(0 4px 8px rgba(237, 137, 54, 0.2));
     }
 
     /* Hide Streamlit branding */
@@ -121,6 +125,7 @@ COMMON_STYLES = """
         font-size: 0.8rem;
         margin-right: 6px;
         display: inline-block;
+        margin-bottom: 4px;
     }
 
     /* Header text sizes */
@@ -131,6 +136,144 @@ COMMON_STYLES = """
     }
     .header-subtitle {
         font-size: 1rem;
+    }
+
+    /* Chat input - reset everything first */
+    [data-testid="stChatInput"],
+    [data-testid="stChatInput"] * {
+        box-sizing: border-box !important;
+    }
+
+    [data-testid="stChatInput"] {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Hide any extra borders/outlines on wrapper elements */
+    [data-testid="stChatInput"] > div,
+    [data-testid="stChatInput"] form,
+    [data-testid="stChatInput"] form > div {
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Copy button for responses */
+    .copy-btn {
+        background: transparent;
+        border: 1px solid #6b7280;
+        border-radius: 6px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        opacity: 0.7;
+        transition: all 0.2s ease;
+    }
+    .copy-btn:hover {
+        opacity: 1;
+        border-color: #ed8936;
+    }
+
+    /* Typing indicator animation */
+    .typing-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #eef1f4 100%);
+        border-radius: 18px;
+        max-width: fit-content;
+    }
+    .typing-text {
+        color: #718096;
+        font-size: 0.9rem;
+    }
+    .typing-dots {
+        display: flex;
+        gap: 4px;
+    }
+    .typing-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #ed8936;
+        border-radius: 50%;
+        animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    .typing-dot:nth-child(3) { animation-delay: 0s; }
+
+    @keyframes bounce {
+        0%, 80%, 100% {
+            transform: scale(0.6);
+            opacity: 0.5;
+        }
+        40% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    /* ===== MOBILE RESPONSIVE ===== */
+    @media screen and (max-width: 768px) {
+        /* Smaller header on mobile */
+        .header-container {
+            padding: 1rem 0 1.5rem 0;
+        }
+        .logo-icon {
+            font-size: 2.5rem;
+        }
+        .header-title {
+            font-size: 1.8rem;
+        }
+        .header-subtitle {
+            font-size: 0.9rem;
+        }
+
+        /* Verse cards - more compact */
+        .verse-card {
+            padding: 0.75rem 1rem;
+            margin: 0.5rem 0;
+        }
+        .verse-text {
+            font-size: 0.9rem;
+        }
+
+        /* Theme tags - smaller on mobile */
+        .theme-tag {
+            padding: 2px 8px;
+            font-size: 0.75rem;
+            margin-right: 4px;
+        }
+
+        /* Make buttons touch-friendly */
+        .stButton > button {
+            min-height: 44px;
+            padding: 0.5rem 1rem;
+        }
+
+        /* Chat input adjustments */
+        [data-testid="stChatInput"] textarea {
+            font-size: 16px !important; /* Prevents iOS zoom */
+        }
+    }
+
+    @media screen and (max-width: 480px) {
+        /* Extra small screens */
+        .header-title {
+            font-size: 1.5rem;
+        }
+        .header-subtitle {
+            font-size: 0.85rem;
+        }
+        .logo-icon {
+            font-size: 2rem;
+        }
+
+        /* Stack feedback buttons better */
+        .stButton > button {
+            font-size: 0.85rem;
+        }
     }
 """
 
@@ -202,7 +345,7 @@ def _get_dark_mode_css(c: ColorScheme) -> str:
             color: {c.text_primary} !important;
         }}
 
-        /* Sidebar buttons */
+        /* Sidebar buttons - modern styling */
         section[data-testid="stSidebar"] button,
         section[data-testid="stSidebar"] .stButton > button,
         section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] {{
@@ -210,6 +353,13 @@ def _get_dark_mode_css(c: ColorScheme) -> str:
             background: {c.bg_button} !important;
             color: {c.text_primary} !important;
             border: 1px solid {c.border} !important;
+            border-radius: 8px !important;
+            padding: 0.5rem 0.75rem !important;
+            min-height: 38px !important;
+            width: 100% !important;
+            transition: all 0.2s ease !important;
+            font-weight: 500 !important;
+            font-size: 0.875rem !important;
         }}
         section[data-testid="stSidebar"] button:hover,
         section[data-testid="stSidebar"] .stButton > button:hover {{
@@ -222,11 +372,15 @@ def _get_dark_mode_css(c: ColorScheme) -> str:
             color: {c.text_primary} !important;
         }}
 
-        /* Chat messages */
+        /* Chat messages - modern styling */
         [data-testid="stChatMessage"] {{
             background-color: {c.bg_secondary} !important;
             background: {c.bg_secondary} !important;
             border: 1px solid {c.border} !important;
+            border-radius: 16px !important;
+            padding: 1rem !important;
+            margin-bottom: 0.75rem !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
         }}
         [data-testid="stChatMessage"] *,
         [data-testid="stChatMessageContent"],
@@ -234,25 +388,72 @@ def _get_dark_mode_css(c: ColorScheme) -> str:
             color: {c.text_primary} !important;
         }}
 
-        /* Chat input */
+        /* User message specific styling */
+        [data-testid="stChatMessage"][data-testid*="user"] {{
+            background: linear-gradient(135deg, {c.bg_secondary} 0%, rgba(237, 137, 54, 0.1) 100%) !important;
+        }}
+
+        /* ===== CHAT INPUT - DARK MODE ===== */
+
+        /* Force dark background on ALL chat input elements */
         [data-testid="stChatInput"],
-        [data-testid="stChatInput"] > div {{
+        [data-testid="stChatInput"] > div,
+        [data-testid="stChatInput"] > div > div,
+        [data-testid="stChatInput"] form,
+        [data-testid="stChatInput"] form > div,
+        [data-testid="stChatInput"] form > div > div,
+        [data-testid="stChatInput"] [class*="st-emotion"],
+        [data-testid="stChatInput"] [data-baseweb],
+        [data-testid="stChatInput"] [data-baseweb] > div {{
+            background: {c.bg_primary} !important;
             background-color: {c.bg_primary} !important;
+            border: none !important;
         }}
-        [data-testid="stChatInput"] [data-baseweb="textarea"],
-        [data-testid="stChatInput"] [class*="TextArea"] {{
-            background-color: {c.bg_input} !important;
-            border-color: {c.border} !important;
+
+        /* The actual visible input container */
+        [data-testid="stChatInput"] [data-baseweb="base-input"] {{
+            background-color: {c.bg_secondary} !important;
+            border: 1px solid {c.border} !important;
+            border-radius: 24px !important;
+            padding: 0.5rem 1rem !important;
         }}
+
+        [data-testid="stChatInput"] [data-baseweb="base-input"]:hover {{
+            border-color: {c.text_muted} !important;
+        }}
+
+        [data-testid="stChatInput"] [data-baseweb="base-input"]:focus-within {{
+            border-color: {c.accent} !important;
+            box-shadow: 0 0 0 2px rgba(237, 137, 54, 0.2) !important;
+        }}
+
+        /* Inner divs inside base-input should be transparent */
+        [data-testid="stChatInput"] [data-baseweb="base-input"] > div,
+        [data-testid="stChatInput"] [data-baseweb="base-input"] div {{
+            background: transparent !important;
+        }}
+
+        /* Textarea */
         [data-testid="stChatInput"] textarea {{
-            background-color: {c.bg_input} !important;
+            background: transparent !important;
             color: {c.text_primary} !important;
+            caret-color: {c.accent} !important;
+            border: none !important;
+            outline: none !important;
         }}
+
         [data-testid="stChatInput"] textarea::placeholder {{
-            color: {c.text_secondary} !important;
+            color: {c.text_muted} !important;
         }}
+
+        /* Send button */
         [data-testid="stChatInput"] button {{
             color: {c.accent} !important;
+            background: transparent !important;
+            border: none !important;
+        }}
+        [data-testid="stChatInput"] button:hover {{
+            color: {c.accent_hover} !important;
         }}
 
         /* Main area buttons */
@@ -325,6 +526,27 @@ def _get_dark_mode_css(c: ColorScheme) -> str:
             color: {c.text_primary} !important;
         }}
 
+        /* Typing indicator dark mode */
+        .typing-indicator {{
+            background: linear-gradient(135deg, {c.bg_secondary} 0%, {c.verse_card_bg} 100%) !important;
+        }}
+        .typing-text {{
+            color: {c.text_secondary} !important;
+        }}
+        .typing-dot {{
+            background-color: {c.accent} !important;
+        }}
+
+        /* Copy button dark mode */
+        .copy-btn {{
+            border-color: {c.border} !important;
+            color: {c.text_secondary} !important;
+        }}
+        .copy-btn:hover {{
+            border-color: {c.accent} !important;
+            color: {c.accent} !important;
+        }}
+
         /* Scrollbar */
         ::-webkit-scrollbar {{
             width: 8px;
@@ -364,11 +586,76 @@ def _get_light_mode_css(c: ColorScheme) -> str:
             color: {c.text_secondary};
         }}
 
+        /* Chat messages - light mode modern styling */
+        [data-testid="stChatMessage"] {{
+            background-color: {c.bg_secondary} !important;
+            border: 1px solid {c.border} !important;
+            border-radius: 16px !important;
+            padding: 1rem !important;
+            margin-bottom: 0.75rem !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+        }}
+
+        /* ===== CHAT INPUT - LIGHT MODE ===== */
+
+        /* Reset wrapper backgrounds */
+        [data-testid="stChatInput"],
+        [data-testid="stChatInput"] > div,
+        [data-testid="stChatInput"] > div > div,
+        [data-testid="stChatInput"] form,
+        [data-testid="stChatInput"] form > div,
+        [data-testid="stChatInput"] form > div > div,
+        [data-testid="stChatInput"] [class*="st-emotion"],
+        [data-testid="stChatInput"] [data-baseweb],
+        [data-testid="stChatInput"] [data-baseweb] > div {{
+            background: {c.bg_primary} !important;
+            background-color: {c.bg_primary} !important;
+            border: none !important;
+        }}
+
+        /* The visible input container */
+        [data-testid="stChatInput"] [data-baseweb="base-input"] {{
+            background-color: {c.bg_secondary} !important;
+            border: 1px solid {c.border} !important;
+            border-radius: 24px !important;
+            padding: 0.5rem 1rem !important;
+        }}
+
+        [data-testid="stChatInput"] [data-baseweb="base-input"]:hover {{
+            border-color: {c.text_muted} !important;
+        }}
+
+        [data-testid="stChatInput"] [data-baseweb="base-input"]:focus-within {{
+            border-color: {c.accent} !important;
+            box-shadow: 0 0 0 2px rgba(230, 126, 34, 0.15) !important;
+        }}
+
+        /* Inner divs transparent */
+        [data-testid="stChatInput"] [data-baseweb="base-input"] > div,
+        [data-testid="stChatInput"] [data-baseweb="base-input"] div {{
+            background: transparent !important;
+        }}
+
+        /* Textarea */
+        [data-testid="stChatInput"] textarea {{
+            background: transparent !important;
+            color: {c.text_primary} !important;
+            border: none !important;
+            outline: none !important;
+        }}
+
+        /* Send button */
+        [data-testid="stChatInput"] button {{
+            color: {c.accent} !important;
+            background: transparent !important;
+            border: none !important;
+        }}
+
         /* Verse cards */
         .verse-card {{
             background: linear-gradient(135deg, {c.verse_card_bg} 0%, #ebedee 100%);
             border-left-color: {c.accent};
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }}
         .verse-ref {{
             color: {c.accent};
@@ -383,19 +670,41 @@ def _get_light_mode_css(c: ColorScheme) -> str:
             color: {c.accent_green};
         }}
 
-        /* Suggestion buttons */
+        /* Sidebar buttons - modern styling */
+        section[data-testid="stSidebar"] button,
+        section[data-testid="stSidebar"] .stButton > button {{
+            background-color: {c.bg_button} !important;
+            border: 1px solid {c.border} !important;
+            border-radius: 8px !important;
+            padding: 0.5rem 0.75rem !important;
+            min-height: 38px !important;
+            width: 100% !important;
+            transition: all 0.2s ease !important;
+            font-weight: 500 !important;
+            font-size: 0.875rem !important;
+        }}
+        section[data-testid="stSidebar"] button:hover,
+        section[data-testid="stSidebar"] .stButton > button:hover {{
+            background-color: {c.bg_button_hover} !important;
+            border-color: {c.accent} !important;
+        }}
+
+        /* Main area buttons */
         .stButton > button {{
             width: 100%;
             text-align: left;
             padding: 0.5rem 1rem;
-            border-radius: 8px;
+            border-radius: 12px;
             border: 1px solid {c.border};
             background-color: {c.bg_button};
             transition: all 0.2s ease;
+            font-weight: 500;
         }}
         .stButton > button:hover {{
             background-color: {c.bg_button_hover};
             border-color: {c.accent};
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }}
     """
 

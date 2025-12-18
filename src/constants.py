@@ -45,7 +45,14 @@ Whether you're stressing about work, dealing with difficult people, feeling a bi
 
 What's going on with you?"""
 
-TYPING_INDICATOR = f"*{APP_ICON} {APP_NAME} is reflecting...*"
+TYPING_INDICATOR = f"""<div class="typing-indicator">
+    <span class="typing-text">{APP_ICON} {APP_NAME} is reflecting</span>
+    <div class="typing-dots">
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+    </div>
+</div>"""
 CHAT_PLACEHOLDER = "What's on your mind?"
 
 NO_VERSES_MESSAGE = """Hmm, I'm not finding a verse that speaks directly to this, but I'm here to listen. Could you tell me more about what's going on? Sometimes just talking it through helps."""

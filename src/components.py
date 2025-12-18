@@ -90,6 +90,36 @@ def render_verses_expander(verses: List[RetrievedVerse], title: str = "See the w
 
 
 # =============================================================================
+# COPY BUTTON COMPONENT
+# =============================================================================
+
+def render_copy_button(text: str, message_index: int) -> None:
+    """
+    Render a copy-to-clipboard button using JavaScript.
+
+    Args:
+        text: Text to copy to clipboard
+        message_index: Unique identifier for the button
+    """
+    # Escape text for JavaScript
+    escaped_text = text.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
+
+    copy_script = f"""
+    <button class="copy-btn" onclick="
+        navigator.clipboard.writeText(`{escaped_text}`).then(function() {{
+            this.innerHTML = '✓ Copied';
+            setTimeout(function() {{
+                document.getElementById('copy-btn-{message_index}').innerHTML = '📋 Copy';
+            }}, 2000);
+        }}.bind(this));
+    " id="copy-btn-{message_index}" title="Copy to clipboard">
+        📋 Copy
+    </button>
+    """
+    st.markdown(copy_script, unsafe_allow_html=True)
+
+
+# =============================================================================
 # FEEDBACK BUTTONS COMPONENT
 # =============================================================================
 
@@ -97,18 +127,20 @@ def render_feedback_buttons(
     message_index: int,
     on_positive: callable,
     on_negative: callable,
-    already_rated: bool = False
+    already_rated: bool = False,
+    response_text: str = ""
 ) -> None:
     """
-    Render thumbs up/down feedback buttons.
+    Render thumbs up/down feedback buttons with copy option.
 
     Args:
         message_index: Index of the message being rated
         on_positive: Callback when positive button clicked
         on_negative: Callback when negative button clicked
         already_rated: Whether this message was already rated
+        response_text: Text content for copy button
     """
-    col1, col2, col3 = st.columns([1, 1, 10])
+    col1, col2, col3, col4 = st.columns([1, 1, 2, 8])
 
     if already_rated:
         with col1:
@@ -123,6 +155,11 @@ def render_feedback_buttons(
         with col2:
             if st.button("👎", key=f"dislike_{message_index}", help="Not helpful"):
                 on_negative()
+
+    # Copy button (always shown if there's text)
+    if response_text:
+        with col3:
+            render_copy_button(response_text, message_index)
 
 
 # =============================================================================
@@ -176,14 +213,12 @@ def render_sidebar_actions(on_clear: callable) -> None:
     Args:
         on_clear: Callback when clear button is clicked
     """
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(
-            f"🗑️ {SIDEBAR_CLEAR_BUTTON}",
-            use_container_width=True,
-            help="Clear conversation"
-        ):
-            on_clear()
+    if st.button(
+        f"🗑️ {SIDEBAR_CLEAR_BUTTON}",
+        use_container_width=True,
+        help="Clear conversation"
+    ):
+        on_clear()
 
 
 def render_sidebar_footer(positive_count: int = 0, negative_count: int = 0) -> None:
