@@ -1,20 +1,26 @@
 """
 Embeddings Generator for GitaBae.
+
 Generates vector embeddings for verse content using OpenAI via OpenRouter.
+These embeddings are then stored in Pinecone for semantic search.
 """
 
 import json
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Callable
 
 from .config import get_openai_client, Config
+from .constants import get_chapter_data_path, get_chapter_embeddings_path
+from .logger import get_embeddings_logger
+
+logger = get_embeddings_logger()
 
 
 class EmbeddingsGenerator:
     """Generates embeddings for verse content."""
 
-    def __init__(self, model: str = None):
+    def __init__(self, model: Optional[str] = None):
         """
         Initialize embeddings generator.
 
@@ -24,6 +30,7 @@ class EmbeddingsGenerator:
         Config.load()
         self.client = get_openai_client()
         self.model = model or Config.EMBEDDING_MODEL
+        logger.info(f"EmbeddingsGenerator initialized with model: {self.model}")
 
     def _prepare_text(self, verse: dict) -> str:
         """
@@ -55,7 +62,7 @@ class EmbeddingsGenerator:
 
         return "\n\n".join(parts)
 
-    def generate_embedding(self, text: str) -> list[float]:
+    def generate_embedding(self, text: str) -> List[float]:
         """
         Generate embedding for a single text.
 
@@ -74,10 +81,10 @@ class EmbeddingsGenerator:
 
     def generate_embeddings_batch(
         self,
-        verses: list[dict],
+        verses: List[dict],
         delay: float = 0.2,
-        progress_callback: Optional[callable] = None
-    ) -> list[dict]:
+        progress_callback: Optional[Callable[[int, int], None]] = None
+    ) -> List[dict]:
         """
         Generate embeddings for multiple verses.
 
@@ -91,6 +98,8 @@ class EmbeddingsGenerator:
         """
         total = len(verses)
         results = []
+
+        logger.info(f"Generating embeddings for {total} verses")
 
         for i, verse in enumerate(verses):
             # Prepare text
@@ -116,25 +125,27 @@ class EmbeddingsGenerator:
                 results.append(result)
 
             except Exception as e:
-                print(f"  Error embedding verse {verse.get('verse', '?')}: {e}")
+                logger.error(f"Error embedding verse {verse.get('verse', '?')}: {e}")
                 continue
 
             # Progress update
             if progress_callback:
                 progress_callback(i + 1, total)
             else:
-                print(f"  [{i+1}/{total}] Verse {verse.get('verse', '?')}: {len(embedding)} dims")
+                logger.info(f"[{i+1}/{total}] Verse {verse.get('verse', '?')}: {len(embedding)} dims")
 
             # Rate limiting
             if i < total - 1:
                 time.sleep(delay)
 
+        logger.info(f"Generated {len(results)} embeddings")
         return results
 
 
 def generate_embeddings_from_file(
-    input_path: str,
-    output_path: str = None,
+    input_path: Optional[str] = None,
+    output_path: Optional[str] = None,
+    chapter: int = 1,
     delay: float = 0.2
 ) -> str:
     """
@@ -142,27 +153,32 @@ def generate_embeddings_from_file(
 
     Args:
         input_path: Path to input JSON file (tagged verses)
-        output_path: Path to output JSON file (default: adds _embeddings suffix)
+        output_path: Path to output JSON file (default: auto-generated)
+        chapter: Chapter number (used if paths not provided)
         delay: Delay between API calls
 
     Returns:
         Path to output file
     """
-    input_path = Path(input_path)
+    # Use constants if paths not provided
+    if input_path is None:
+        input_path = get_chapter_data_path(chapter)
+    else:
+        input_path = Path(input_path)
 
     if output_path is None:
-        output_path = input_path.parent / f"{input_path.stem.replace('_tagged', '')}_embeddings.json"
+        output_path = get_chapter_embeddings_path(chapter)
     else:
         output_path = Path(output_path)
 
-    print(f"Loading verses from {input_path}")
+    logger.info(f"Loading verses from {input_path}")
     with open(input_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     verses = data.get("verses", [])
-    print(f"Found {len(verses)} verses to embed")
+    logger.info(f"Found {len(verses)} verses to embed")
 
-    print(f"\nGenerating embeddings (delay={delay}s between calls)...")
+    logger.info(f"Generating embeddings (delay={delay}s between calls)...")
     generator = EmbeddingsGenerator()
     embedded_verses = generator.generate_embeddings_batch(verses, delay=delay)
 
@@ -170,7 +186,7 @@ def generate_embeddings_from_file(
     output_data = {
         "metadata": {
             "source": data.get("metadata", {}).get("source", ""),
-            "chapter": data.get("metadata", {}).get("chapter", 1),
+            "chapter": data.get("metadata", {}).get("chapter", chapter),
             "total_vectors": len(embedded_verses),
             "embedding_model": Config.EMBEDDING_MODEL,
             "dimensions": len(embedded_verses[0]["values"]) if embedded_verses else 0
@@ -178,11 +194,14 @@ def generate_embeddings_from_file(
         "vectors": embedded_verses
     }
 
+    # Ensure output directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
 
-    print(f"\nSaved {len(embedded_verses)} embeddings to {output_path}")
-    print(f"Embedding dimensions: {output_data['metadata']['dimensions']}")
+    logger.info(f"Saved {len(embedded_verses)} embeddings to {output_path}")
+    logger.info(f"Embedding dimensions: {output_data['metadata']['dimensions']}")
 
     return str(output_path)
 
@@ -191,19 +210,23 @@ def main():
     """Main function to run embedding generation."""
     import sys
 
-    input_file = "/Users/yashvi/Documents/Projects/gitabae/data/chapter_1_tagged.json"
-    output_file = "/Users/yashvi/Documents/Projects/gitabae/data/chapter_1_embeddings.json"
+    print("=" * 60)
+    print("GitaBae - Embeddings Generator")
+    print("=" * 60)
+
+    # Default to chapter 1
+    chapter = 1
+
+    # Allow command line override
+    input_file = None
+    output_file = None
 
     if len(sys.argv) > 1:
         input_file = sys.argv[1]
     if len(sys.argv) > 2:
         output_file = sys.argv[2]
 
-    print("=" * 60)
-    print("GitaBae - Embeddings Generator")
-    print("=" * 60)
-
-    generate_embeddings_from_file(input_file, output_file, delay=0.2)
+    generate_embeddings_from_file(input_file, output_file, chapter=chapter, delay=0.2)
 
 
 if __name__ == "__main__":

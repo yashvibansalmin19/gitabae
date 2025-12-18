@@ -1,53 +1,45 @@
 """
 Response Generator Module for GitaBae.
+
 Uses LLM to generate compassionate, wisdom-based responses.
+Integrates retrieval, safety checking, and response generation.
 """
 
+from typing import List, Optional
+
 from .config import get_openai_client, Config
+from .constants import (
+    SYSTEM_PROMPT,
+    LLM_TEMPERATURE,
+    LLM_MAX_TOKENS,
+    BLOCKED_INPUT_MESSAGE,
+    NO_VERSES_MESSAGE,
+    GENERATION_ERROR_MESSAGE,
+    CONNECTION_ERROR_MESSAGE,
+    APP_NAME,
+)
+from .logger import get_generator_logger
 from .retriever import Retriever, RetrievedVerse
 from .safety import SafetyChecker, SafetyStatus
 
-
-SYSTEM_PROMPT = """You are GitaBae, a warm and wise friend who helps young professionals navigate life using insights from the Bhagavad Gita.
-
-Your voice:
-- Speak like a caring friend who happens to know ancient wisdom - not a guru or teacher
-- Be conversational, genuine, and relatable
-- Match the user's energy - if they're casual, be casual; if they're distressed, be gentle
-- Use "I" and "you" naturally, like in a real conversation
-- It's okay to be brief when that's what's needed
-
-How to respond:
-- Start by connecting with what they shared (but don't over-acknowledge or be formulaic)
-- Weave in Gita wisdom naturally - don't quote formally, paraphrase in modern language
-- Share the insight as if you're telling them something that helped you personally
-- Give ONE practical suggestion they can actually do today
-- Keep it real - you can admit when life is genuinely hard
-
-Vary your style:
-- Sometimes ask a reflective question back
-- Sometimes share a brief personal-style insight
-- Sometimes just offer comfort without advice
-- Don't always follow the same structure
-
-Length: Match the depth of their question. Quick worries get quick comfort. Deep questions get thoughtful responses. Usually 100-200 words.
-
-Important: Draw from the provided verses but express ideas in your own words. Never say "the Gita says" or quote formally unless it adds value."""
+logger = get_generator_logger()
 
 
 class ResponseGenerator:
     """Generates conversational responses using retrieved Gita wisdom."""
 
     def __init__(self):
+        """Initialize the response generator with all dependencies."""
         Config.load()
         self.client = get_openai_client()
         self.retriever = Retriever()
         self.safety = SafetyChecker()
+        logger.info("ResponseGenerator initialized")
 
     def generate(
         self,
         user_query: str,
-        conversation_history: list = None,
+        conversation_history: Optional[List[dict]] = None,
         top_k: int = 2,
         min_score: float = 0.5
     ) -> dict:
@@ -66,6 +58,8 @@ class ResponseGenerator:
         if conversation_history is None:
             conversation_history = []
 
+        logger.info(f"Generating response for query: {user_query[:50]}...")
+
         # Sanitize input
         sanitized_query = self.safety.sanitize_input(user_query)
 
@@ -73,14 +67,16 @@ class ResponseGenerator:
         safety_result = self.safety.check_input(sanitized_query)
 
         if safety_result.status == SafetyStatus.BLOCKED:
+            logger.warning(f"Query blocked: {safety_result.reason}")
             return {
-                "response": "I'm not able to help with that request. Let's talk about something else - perhaps what's really troubling you?",
+                "response": BLOCKED_INPUT_MESSAGE,
                 "verses": [],
                 "success": False,
                 "safety_status": "blocked"
             }
 
         if safety_result.status == SafetyStatus.REDIRECT:
+            logger.info(f"Query redirected: {safety_result.reason}")
             return {
                 "response": safety_result.redirect_message,
                 "verses": [],
@@ -91,10 +87,12 @@ class ResponseGenerator:
 
         # Retrieve relevant verses
         verses = self.retriever.retrieve(sanitized_query, top_k=top_k, min_score=min_score)
+        logger.info(f"Retrieved {len(verses)} verses")
 
         if not verses:
+            logger.info("No relevant verses found")
             return {
-                "response": "Hmm, I'm not finding a verse that speaks directly to this, but I'm here to listen. Could you tell me more about what's going on? Sometimes just talking it through helps.",
+                "response": NO_VERSES_MESSAGE,
                 "verses": [],
                 "success": False,
                 "safety_status": "safe"
@@ -109,8 +107,10 @@ class ResponseGenerator:
         # Check output safety
         output_safety = self.safety.check_output(response)
         if output_safety.status == SafetyStatus.BLOCKED:
-            response = "I apologize, but I wasn't able to generate an appropriate response. Could you rephrase your question?"
+            logger.warning("Generated response blocked by safety check")
+            response = GENERATION_ERROR_MESSAGE
 
+        logger.info("Response generated successfully")
         return {
             "response": response,
             "verses": verses,
@@ -118,7 +118,7 @@ class ResponseGenerator:
             "safety_status": "safe"
         }
 
-    def _build_context(self, verses: list[RetrievedVerse]) -> str:
+    def _build_context(self, verses: List[RetrievedVerse]) -> str:
         """Build context string from retrieved verses."""
         context_parts = []
 
@@ -132,7 +132,12 @@ Themes: {', '.join(verse.tags)}
 
         return "\n".join(context_parts)
 
-    def _call_llm(self, user_query: str, context: str, conversation_history: list = None) -> str:
+    def _call_llm(
+        self,
+        user_query: str,
+        context: str,
+        conversation_history: Optional[List[dict]] = None
+    ) -> str:
         """Call LLM to generate response with conversation context."""
         if conversation_history is None:
             conversation_history = []
@@ -153,21 +158,24 @@ Themes: {', '.join(verse.tags)}
         current_message = f"""{user_query}
 
 ---
-[Context for GitaBae - relevant wisdom to draw from, express naturally:]
+[Context for {APP_NAME} - relevant wisdom to draw from, express naturally:]
 {context}"""
 
         messages.append({"role": "user", "content": current_message})
 
         try:
+            logger.debug(f"Calling LLM with {len(messages)} messages")
             response = self.client.chat.completions.create(
                 model=Config.LLM_MODEL,
                 messages=messages,
-                temperature=0.8,  # Slightly higher for more varied responses
-                max_tokens=400
+                temperature=LLM_TEMPERATURE,
+                max_tokens=LLM_MAX_TOKENS
             )
             return response.choices[0].message.content
+
         except Exception as e:
-            return f"I'm having trouble connecting right now. Please try again. (Error: {str(e)[:50]})"
+            logger.error(f"LLM call failed: {e}", exc_info=True)
+            return f"{CONNECTION_ERROR_MESSAGE} (Error: {str(e)[:50]})"
 
 
 def main():

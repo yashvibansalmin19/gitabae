@@ -1,373 +1,104 @@
 """
 GitaBae - Streamlit App
+
 A chatbot that provides life guidance using wisdom from the Bhagavad Gita.
+
+This file is the thin orchestrator that ties together all the modules.
+Business logic, styling, and components are imported from src/.
 """
 
 import streamlit as st
-import json
-from datetime import datetime
-from pathlib import Path
+
+from src.constants import (
+    APP_NAME,
+    APP_ICON,
+    WELCOME_MESSAGE,
+    CHAT_PLACEHOLDER,
+    RETRIEVAL_TOP_K,
+    RETRIEVAL_MIN_SCORE,
+    FEEDBACK_POSITIVE_TOAST,
+    FEEDBACK_NEGATIVE_TOAST,
+)
+from src.styles import get_css
+from src.components import (
+    render_header,
+    render_verse_card,
+    render_verses_expander,
+    render_feedback_buttons,
+    render_sidebar_starters,
+    render_sidebar_topics,
+    render_sidebar_actions,
+    render_sidebar_footer,
+    show_typing_indicator,
+    clear_typing_indicator,
+)
+from src.feedback import FeedbackEntry, get_feedback_storage
 from src.generator import ResponseGenerator
 from src.retriever import Retriever
 
-# Page config
+
+# =============================================================================
+# PAGE CONFIGURATION
+# =============================================================================
+
 st.set_page_config(
-    page_title="GitaBae",
-    page_icon="🪷",
+    page_title=APP_NAME,
+    page_icon=APP_ICON,
     layout="centered"
 )
 
-# Initialize dark mode in session state
-if "dark_mode" not in st.session_state:
-    st.session_state.dark_mode = False
 
-# Initialize feedback log
-if "feedback_log" not in st.session_state:
-    st.session_state.feedback_log = []
+# =============================================================================
+# SESSION STATE INITIALIZATION
+# =============================================================================
 
-# CSS with dark mode support - comprehensive Streamlit overrides
-def get_css(dark_mode: bool) -> str:
-    # Common styles for both modes
-    common = """
-        /* Header styling */
-        .header-container {
-            text-align: center;
-            padding: 1.5rem 0 2rem 0;
-        }
-        .logo-icon {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
-        }
-        /* Hide Streamlit branding */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-    """
+def init_session_state():
+    """Initialize all session state variables."""
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = False
 
-    if dark_mode:
-        return f"""
-        <style>
-            {common}
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+        # Add welcome message
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": WELCOME_MESSAGE,
+            "verses": []
+        })
 
-            /* ===== DARK MODE - NUCLEAR OVERRIDE ===== */
+    if "pending_question" not in st.session_state:
+        st.session_state.pending_question = None
 
-            /* Force dark on EVERYTHING */
-            html, body, .stApp, [data-testid="stAppViewContainer"],
-            [data-testid="stAppViewContainer"] > div,
-            [data-testid="stAppViewContainer"] > div > div,
-            .main, .main > div, .block-container,
-            [data-testid="stMainBlockContainer"],
-            [data-testid="stVerticalBlock"],
-            [data-testid="stVerticalBlockBorderWrapper"],
-            [class*="stAppViewBlockContainer"],
-            [class*="block-container"] {{
-                background-color: #0f0f1a !important;
-                background: #0f0f1a !important;
-            }}
 
-            /* Bottom input area - CRITICAL FIX */
-            [data-testid="stBottom"],
-            [data-testid="stBottom"] > div,
-            [data-testid="stBottom"] [data-testid="stVerticalBlock"],
-            [data-testid="stBottomBlockContainer"],
-            [class*="stBottom"],
-            .stChatFloatingInputContainer,
-            [data-testid="stChatFloatingInputContainer"],
-            [class*="ChatInput"],
-            [class*="chatInput"] {{
-                background-color: #0f0f1a !important;
-                background: #0f0f1a !important;
-            }}
+init_session_state()
 
-            /* Header */
-            [data-testid="stHeader"], header, [data-testid="stToolbar"] {{
-                background-color: #0f0f1a !important;
-                background: #0f0f1a !important;
-            }}
 
-            /* Header text */
-            .header-title {{
-                font-size: 2.2rem;
-                font-weight: 700;
-                color: #ffffff !important;
-                margin-bottom: 0.25rem;
-            }}
-            .header-subtitle {{
-                font-size: 1rem;
-                color: #9ca3af !important;
-            }}
+# =============================================================================
+# CACHED RESOURCES
+# =============================================================================
 
-            /* Sidebar */
-            section[data-testid="stSidebar"],
-            section[data-testid="stSidebar"] > div,
-            section[data-testid="stSidebar"] [data-testid="stVerticalBlock"],
-            [data-testid="stSidebarContent"],
-            [data-testid="stSidebarUserContent"],
-            [data-testid="stSidebarNav"] {{
-                background-color: #1a1a2e !important;
-                background: #1a1a2e !important;
-            }}
-
-            /* Sidebar text - all of it */
-            section[data-testid="stSidebar"] * {{
-                color: #e5e7eb !important;
-            }}
-
-            /* Sidebar buttons - VISIBLE TEXT */
-            section[data-testid="stSidebar"] button,
-            section[data-testid="stSidebar"] .stButton > button,
-            section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] {{
-                background-color: #2d2d44 !important;
-                background: #2d2d44 !important;
-                color: #ffffff !important;
-                border: 1px solid #4a4a6a !important;
-            }}
-            section[data-testid="stSidebar"] button:hover,
-            section[data-testid="stSidebar"] .stButton > button:hover {{
-                background-color: #3d3d5c !important;
-                background: #3d3d5c !important;
-                border-color: #ed8936 !important;
-            }}
-            section[data-testid="stSidebar"] button p,
-            section[data-testid="stSidebar"] button span {{
-                color: #ffffff !important;
-            }}
-
-            /* Chat messages */
-            [data-testid="stChatMessage"] {{
-                background-color: #1e1e2e !important;
-                background: #1e1e2e !important;
-                border: 1px solid #374151 !important;
-            }}
-            [data-testid="stChatMessage"] *,
-            [data-testid="stChatMessageContent"],
-            [data-testid="stChatMessageContent"] * {{
-                color: #e5e7eb !important;
-            }}
-
-            /* Chat input - simple dark styling */
-            [data-testid="stChatInput"],
-            [data-testid="stChatInput"] > div {{
-                background-color: #0f0f1a !important;
-            }}
-            [data-testid="stChatInput"] [data-baseweb="textarea"],
-            [data-testid="stChatInput"] [class*="TextArea"] {{
-                background-color: #1e1e2e !important;
-                border-color: #374151 !important;
-            }}
-            [data-testid="stChatInput"] textarea {{
-                background-color: #1e1e2e !important;
-                color: #e5e7eb !important;
-            }}
-            [data-testid="stChatInput"] textarea::placeholder {{
-                color: #9ca3af !important;
-            }}
-            [data-testid="stChatInput"] button {{
-                color: #ed8936 !important;
-            }}
-
-            /* Main area buttons */
-            .stButton > button {{
-                background-color: #1e1e2e !important;
-                background: #1e1e2e !important;
-                color: #e5e7eb !important;
-                border: 1px solid #374151 !important;
-            }}
-            .stButton > button:hover {{
-                background-color: #2d2d44 !important;
-                background: #2d2d44 !important;
-                border-color: #ed8936 !important;
-                color: #ffffff !important;
-            }}
-
-            /* Expander */
-            [data-testid="stExpander"],
-            [data-testid="stExpander"] > div {{
-                background-color: #1e1e2e !important;
-                background: #1e1e2e !important;
-                border: 1px solid #374151 !important;
-            }}
-            [data-testid="stExpander"] summary,
-            [data-testid="stExpander"] summary span {{
-                color: #9ca3af !important;
-                background-color: transparent !important;
-            }}
-            [data-testid="stExpanderDetails"] {{
-                background-color: #1e1e2e !important;
-                background: #1e1e2e !important;
-            }}
-
-            /* Verse cards */
-            .verse-card {{
-                background: #1f2937 !important;
-                padding: 1rem 1.25rem;
-                border-radius: 12px;
-                margin: 0.75rem 0;
-                border-left: 4px solid #ed8936 !important;
-            }}
-            .verse-ref {{
-                color: #ed8936 !important;
-                font-weight: 600;
-            }}
-            .verse-text {{
-                color: #e5e7eb !important;
-                font-style: italic;
-            }}
-
-            /* Theme tags */
-            .theme-tag {{
-                background-color: rgba(72, 187, 120, 0.2) !important;
-                color: #4ade80 !important;
-                padding: 3px 10px;
-                border-radius: 15px;
-                font-size: 0.8rem;
-                margin-right: 6px;
-                display: inline-block;
-            }}
-
-            /* Toggle */
-            [data-testid="stToggle"] span {{
-                color: #e5e7eb !important;
-            }}
-
-            /* All text defaults */
-            .stMarkdown, .stMarkdown p, .stMarkdown span {{
-                color: #e5e7eb !important;
-            }}
-
-            /* Dividers */
-            hr {{
-                border-color: #374151 !important;
-            }}
-
-            /* Toast */
-            [data-testid="stToast"] {{
-                background-color: #1e1e2e !important;
-                color: #e5e7eb !important;
-            }}
-
-            /* Scrollbar */
-            ::-webkit-scrollbar {{
-                width: 8px;
-                height: 8px;
-            }}
-            ::-webkit-scrollbar-track {{
-                background: #1a1a2e;
-            }}
-            ::-webkit-scrollbar-thumb {{
-                background: #4a4a6a;
-                border-radius: 4px;
-            }}
-            ::-webkit-scrollbar-thumb:hover {{
-                background: #5a5a7a;
-            }}
-
-            /* Catch-all for any remaining light backgrounds */
-            [class*="st-emotion-cache"] {{
-                background-color: transparent !important;
-            }}
-        </style>
-        """
-    else:
-        return f"""
-        <style>
-            {common}
-
-            /* ===== LIGHT MODE ===== */
-
-            .header-title {{
-                font-size: 2.2rem;
-                font-weight: 700;
-                color: #2c3e50;
-                margin-bottom: 0.25rem;
-            }}
-            .header-subtitle {{
-                font-size: 1rem;
-                color: #718096;
-            }}
-
-            /* Verse cards */
-            .verse-card {{
-                background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
-                padding: 1rem 1.25rem;
-                border-radius: 12px;
-                margin: 0.75rem 0;
-                border-left: 4px solid #e67e22;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            }}
-            .verse-ref {{
-                color: #e67e22;
-                font-weight: 600;
-            }}
-            .verse-text {{
-                color: #34495e;
-                font-style: italic;
-            }}
-
-            /* Theme tags */
-            .theme-tag {{
-                background-color: #e8f4e8;
-                color: #27ae60;
-                padding: 3px 10px;
-                border-radius: 15px;
-                font-size: 0.8rem;
-                margin-right: 6px;
-                display: inline-block;
-            }}
-
-            /* Suggestion buttons */
-            .stButton > button {{
-                width: 100%;
-                text-align: left;
-                padding: 0.5rem 1rem;
-                border-radius: 8px;
-                border: 1px solid #e0e0e0;
-                background-color: white;
-                transition: all 0.2s ease;
-            }}
-            .stButton > button:hover {{
-                background-color: #fff5eb;
-                border-color: #e67e22;
-            }}
-        </style>
-        """
-
-# Apply CSS based on dark mode setting
-st.markdown(get_css(st.session_state.dark_mode), unsafe_allow_html=True)
-
-# Initialize generator
 @st.cache_resource
 def get_generator():
+    """Get cached response generator."""
     return ResponseGenerator()
+
 
 @st.cache_resource
 def get_retriever():
+    """Get cached retriever."""
     return Retriever()
+
 
 generator = get_generator()
 retriever = get_retriever()
-
-# Header
-st.markdown("""
-<div class="header-container">
-    <div class="logo-icon">🪷</div>
-    <div class="header-title">GitaBae</div>
-    <div class="header-subtitle">Navigate life with timeless wisdom</div>
-</div>
-""", unsafe_allow_html=True)
-
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    # Welcome message - more casual and inviting
-    welcome = """Hey! I'm GitaBae - think of me as a friend who's really into ancient wisdom and loves talking about life's big (and small) questions.
-
-Whether you're stressing about work, dealing with difficult people, feeling a bit lost, or just need someone to talk through something with - I'm here.
-
-What's going on with you?"""
-    st.session_state.messages.append({"role": "assistant", "content": welcome, "verses": []})
+feedback_storage = get_feedback_storage()
 
 
-def get_conversation_history():
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def get_conversation_history() -> list:
     """Get conversation history in format suitable for generator."""
     history = []
     for msg in st.session_state.messages:
@@ -379,133 +110,142 @@ def get_conversation_history():
     return history
 
 
-def log_feedback(message_index: int, rating: str, query: str, response: str):
-    """Log user feedback for analysis."""
-    feedback_entry = {
-        "timestamp": datetime.now().isoformat(),
-        "message_index": message_index,
-        "rating": rating,
-        "query": query[:100] if query else "",
-        "response_preview": response[:150] if response else "",
-    }
-    st.session_state.feedback_log.append(feedback_entry)
-
-    # Also save to file for persistence (optional)
-    feedback_file = Path(__file__).parent / "data" / "feedback_log.json"
-    try:
-        if feedback_file.exists():
-            with open(feedback_file, 'r') as f:
-                all_feedback = json.load(f)
-        else:
-            all_feedback = []
-
-        all_feedback.append(feedback_entry)
-
-        with open(feedback_file, 'w') as f:
-            json.dump(all_feedback, f, indent=2)
-    except Exception:
-        pass  # Silently fail if can't write to file
-
-
-def render_verse_card(verse):
-    """Render a verse card with consistent styling."""
-    return f"""
-<div class="verse-card">
-    <span class="verse-ref">Chapter {verse.chapter}, Verse {verse.verse}</span>
-    <span style="color: #95a5a6; font-size: 0.85rem;"> • {verse.score:.0%} relevant</span>
-    <p class="verse-text">"{verse.translation}"</p>
-    <div>{''.join([f'<span class="theme-tag">{tag}</span>' for tag in verse.tags])}</div>
-</div>
+def process_user_message(message: str) -> dict:
     """
+    Process a user message and generate response.
 
-# Display chat history
-for i, message in enumerate(st.session_state.messages):
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    Args:
+        message: User's input message
 
-        # Show verse references and feedback for assistant messages
-        if message["role"] == "assistant" and i > 0:  # Skip welcome message
-            # Verse references
-            if message.get("verses"):
-                with st.expander("See the wisdom behind this"):
-                    for verse in message["verses"]:
-                        st.markdown(render_verse_card(verse), unsafe_allow_html=True)
+    Returns:
+        Result dict with 'response' and 'verses'
+    """
+    # Add user message to history
+    st.session_state.messages.append({
+        "role": "user",
+        "content": message,
+        "verses": []
+    })
 
-            # Feedback buttons (only for assistant responses with content)
-            if message.get("content") and len(message["content"]) > 50:
-                # Get the user query that preceded this response
-                prev_query = ""
-                if i > 0 and st.session_state.messages[i-1]["role"] == "user":
-                    prev_query = st.session_state.messages[i-1]["content"]
+    # Get conversation history and generate response
+    history = get_conversation_history()
+    result = generator.generate(
+        message,
+        conversation_history=history,
+        top_k=RETRIEVAL_TOP_K,
+        min_score=RETRIEVAL_MIN_SCORE
+    )
 
-                col1, col2, col3 = st.columns([1, 1, 10])
-                feedback_key = f"feedback_{i}"
-
-                # Check if already rated
-                already_rated = any(
-                    f.get("message_index") == i
-                    for f in st.session_state.feedback_log
-                )
-
-                if not already_rated:
-                    with col1:
-                        if st.button("👍", key=f"like_{i}", help="This was helpful"):
-                            log_feedback(i, "positive", prev_query, message["content"])
-                            st.toast("Thanks! This helps us improve.")
-                            st.rerun()
-                    with col2:
-                        if st.button("👎", key=f"dislike_{i}", help="Not helpful"):
-                            log_feedback(i, "negative", prev_query, message["content"])
-                            st.toast("Thanks for the feedback!")
-                            st.rerun()
-                else:
-                    with col1:
-                        st.markdown("<small style='color: #95a5a6;'>✓ Rated</small>", unsafe_allow_html=True)
-
-# Chat input
-if prompt := st.chat_input("What's on your mind?"):
-    # Add user message
-    st.session_state.messages.append({"role": "user", "content": prompt, "verses": []})
-
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    # Generate response with conversation history
-    with st.chat_message("assistant"):
-        # Typing indicator
-        typing_placeholder = st.empty()
-        typing_placeholder.markdown("*🪷 GitaBae is reflecting...*")
-
-        # Pass conversation history for context
-        conversation_history = get_conversation_history()
-        result = generator.generate(
-            prompt,
-            conversation_history=conversation_history,
-            top_k=2,
-            min_score=0.4
-        )
-
-        # Clear typing indicator and show response
-        typing_placeholder.empty()
-        st.markdown(result["response"])
-
-        # Show verse references
-        if result["verses"]:
-            with st.expander("See the wisdom behind this"):
-                for verse in result["verses"]:
-                    st.markdown(render_verse_card(verse), unsafe_allow_html=True)
-
-    # Save to history
+    # Add assistant response to history
     st.session_state.messages.append({
         "role": "assistant",
         "content": result["response"],
         "verses": result["verses"]
     })
 
-# Sidebar
+    return result
+
+
+def handle_feedback(message_index: int, rating: str, query: str, response: str):
+    """Handle feedback button click."""
+    entry = FeedbackEntry.create(
+        message_index=message_index,
+        rating=rating,
+        query=query,
+        response=response
+    )
+    feedback_storage.save(entry)
+
+    toast_msg = FEEDBACK_POSITIVE_TOAST if rating == "positive" else FEEDBACK_NEGATIVE_TOAST
+    st.toast(toast_msg)
+    st.rerun()
+
+
+def clear_chat():
+    """Clear chat history and feedback."""
+    st.session_state.messages = []
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": WELCOME_MESSAGE,
+        "verses": []
+    })
+    feedback_storage.clear_session()
+    st.rerun()
+
+
+# =============================================================================
+# APPLY STYLES
+# =============================================================================
+
+st.markdown(get_css(st.session_state.dark_mode), unsafe_allow_html=True)
+
+
+# =============================================================================
+# HEADER
+# =============================================================================
+
+render_header()
+
+
+# =============================================================================
+# CHAT DISPLAY
+# =============================================================================
+
+for i, message in enumerate(st.session_state.messages):
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+        # Show verse references and feedback for assistant messages (skip welcome)
+        if message["role"] == "assistant" and i > 0:
+            # Verse expander
+            if message.get("verses"):
+                render_verses_expander(message["verses"])
+
+            # Feedback buttons
+            if message.get("content") and len(message["content"]) > 50:
+                prev_query = ""
+                if i > 0 and st.session_state.messages[i - 1]["role"] == "user":
+                    prev_query = st.session_state.messages[i - 1]["content"]
+
+                already_rated = feedback_storage.is_rated(i)
+
+                render_feedback_buttons(
+                    message_index=i,
+                    on_positive=lambda idx=i, q=prev_query, r=message["content"]: handle_feedback(idx, "positive", q, r),
+                    on_negative=lambda idx=i, q=prev_query, r=message["content"]: handle_feedback(idx, "negative", q, r),
+                    already_rated=already_rated
+                )
+
+
+# =============================================================================
+# CHAT INPUT
+# =============================================================================
+
+if prompt := st.chat_input(CHAT_PLACEHOLDER):
+    # Display user message
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Generate and display response
+    with st.chat_message("assistant"):
+        typing_placeholder = st.empty()
+        show_typing_indicator(typing_placeholder)
+
+        result = process_user_message(prompt)
+
+        clear_typing_indicator(typing_placeholder)
+        st.markdown(result["response"])
+
+        if result["verses"]:
+            render_verses_expander(result["verses"])
+
+
+# =============================================================================
+# SIDEBAR
+# =============================================================================
+
 with st.sidebar:
-    # Dark mode toggle at top
-    # st.markdown("### ⚙️ Settings")
+    # Dark mode toggle
     dark_mode = st.toggle(
         "🌙 Dark Mode",
         value=st.session_state.dark_mode,
@@ -517,80 +257,38 @@ with st.sidebar:
 
     st.markdown("---")
 
-    st.markdown("### 💭 Conversation Starters")
-    st.markdown("<small style='color: #7f8c8d;'>Click to try one</small>", unsafe_allow_html=True)
+    # Conversation starters
+    def on_starter_click(question: str):
+        st.session_state.pending_question = question
+        st.rerun()
 
-    suggestions = [
-        ("I'm stressed about work", "Work stress"),
-        ("How do I stop overthinking everything?", "Overthinking"),
-        ("I feel like I've lost my way", "Feeling lost"),
-        ("Someone keeps making my life difficult", "Difficult people"),
-        ("I can't decide what to do", "Decision making"),
-        ("I keep dwelling on past mistakes", "Past regrets"),
-        ("I'm scared about the future", "Fear & anxiety"),
-        ("How do I stay motivated?", "Motivation"),
-    ]
-
-    for question, label in suggestions:
-        if st.button(f"💬 {label}", key=question, help=question):
-            st.session_state.pending_question = question
-            st.rerun()
+    render_sidebar_starters(on_starter_click)
 
     st.markdown("---")
 
-    st.markdown("### 🏷️ Topics I Know About")
+    # Topics
     tags = retriever.get_all_tags()
-    # Display tags in a nicer format
-    tag_html = " ".join([f'<span class="theme-tag">{tag}</span>' for tag in sorted(tags)[:12]])
-    st.markdown(f"<div style='line-height: 2;'>{tag_html}</div>", unsafe_allow_html=True)
+    render_sidebar_topics(tags)
 
     st.markdown("---")
 
-    # Action buttons
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🗑️ Clear chat", use_container_width=True, help="Clear conversation"):
-            st.session_state.messages = []
-            st.session_state.feedback_log = []
-            st.rerun()
+    # Actions
+    render_sidebar_actions(on_clear=clear_chat)
 
-    # Feedback stats (if any)
-    if st.session_state.feedback_log:
-        positive = sum(1 for f in st.session_state.feedback_log if f["rating"] == "positive")
-        negative = sum(1 for f in st.session_state.feedback_log if f["rating"] == "negative")
-        st.markdown(f"""
-        <div style='text-align: center; color: #95a5a6; font-size: 0.75rem; margin-top: 1rem;'>
-            Session feedback: 👍 {positive} | 👎 {negative}
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; color: #95a5a6; font-size: 0.8rem;'>
-        Based on <strong>Yatharth Gita</strong><br/>
-        Chapter 1 (47 verses)
-    </div>
-    """, unsafe_allow_html=True)
-
-# Handle suggestion clicks
-if "pending_question" in st.session_state:
-    question = st.session_state.pending_question
-    del st.session_state.pending_question
-
-    # Add to messages
-    st.session_state.messages.append({"role": "user", "content": question, "verses": []})
-
-    # Generate with conversation history
-    conversation_history = get_conversation_history()
-    result = generator.generate(
-        question,
-        conversation_history=conversation_history,
-        top_k=2,
-        min_score=0.4
+    # Footer with stats
+    counts = feedback_storage.count_by_rating()
+    render_sidebar_footer(
+        positive_count=counts["positive"],
+        negative_count=counts["negative"]
     )
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": result["response"],
-        "verses": result["verses"]
-    })
+
+
+# =============================================================================
+# HANDLE PENDING QUESTION (from sidebar clicks)
+# =============================================================================
+
+if st.session_state.pending_question:
+    question = st.session_state.pending_question
+    st.session_state.pending_question = None
+    process_user_message(question)
     st.rerun()

@@ -1,14 +1,21 @@
 """
 Retriever Module for GitaBae.
+
 Handles semantic search and context preparation for the chatbot.
+Retrieves relevant verses from the vector store based on user queries.
 """
 
 import json
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional, Union
 
 from .vectorstore import VectorStore
 from .config import Config
+from .constants import get_chapter_data_path
+from .logger import get_retriever_logger
+
+logger = get_retriever_logger()
 
 
 @dataclass
@@ -19,7 +26,7 @@ class RetrievedVerse:
     sanskrit: str
     translation: str
     commentary: str
-    tags: list[str]
+    tags: List[str]
     score: float
 
     def to_context(self, include_commentary: bool = True) -> str:
@@ -40,27 +47,30 @@ class RetrievedVerse:
 class Retriever:
     """Handles retrieval of relevant Gita verses for user queries."""
 
-    def __init__(self, data_path: str = None):
+    def __init__(self, data_path: Optional[Union[str, Path]] = None, chapter: int = 1):
         """
         Initialize retriever.
 
         Args:
-            data_path: Path to tagged JSON data file
+            data_path: Path to tagged JSON data file (optional, uses default if not provided)
+            chapter: Chapter number to load (used if data_path not provided)
         """
         Config.load()
         self.vector_store = VectorStore()
 
-        # Load full verse data for complete responses
+        # Use provided path or get from constants
         if data_path is None:
-            data_path = Path(__file__).parent.parent / "data" / "chapter_1_tagged.json"
+            data_path = get_chapter_data_path(chapter)
 
         self.verses_data = self._load_verses(data_path)
+        logger.info(f"Retriever initialized with {len(self.verses_data)} verses")
 
-    def _load_verses(self, data_path: str | Path) -> dict:
+    def _load_verses(self, data_path: Union[str, Path]) -> dict:
         """Load verse data indexed by verse ID."""
         data_path = Path(data_path)
 
         if not data_path.exists():
+            logger.error(f"Data file not found: {data_path}")
             raise FileNotFoundError(f"Data file not found: {data_path}")
 
         with open(data_path, 'r', encoding='utf-8') as f:
@@ -72,6 +82,7 @@ class Retriever:
             verse_id = f"chapter_{verse['chapter']}_verse_{verse['verse']}"
             verses[verse_id] = verse
 
+        logger.debug(f"Loaded {len(verses)} verses from {data_path}")
         return verses
 
     def retrieve(
@@ -79,7 +90,7 @@ class Retriever:
         query: str,
         top_k: int = 3,
         min_score: float = 0.5
-    ) -> list[RetrievedVerse]:
+    ) -> List[RetrievedVerse]:
         """
         Retrieve relevant verses for a query.
 
@@ -91,6 +102,8 @@ class Retriever:
         Returns:
             List of RetrievedVerse objects sorted by relevance
         """
+        logger.info(f"Retrieving verses for: {query[:50]}...")
+
         # Query vector store
         results = self.vector_store.query(query, top_k=top_k)
 
@@ -98,6 +111,7 @@ class Retriever:
         retrieved = []
         for result in results:
             if result['score'] < min_score:
+                logger.debug(f"Skipping verse {result['id']} - score {result['score']:.2f} below threshold")
                 continue
 
             verse_id = result['id']
@@ -114,6 +128,7 @@ class Retriever:
                     score=result['score']
                 ))
 
+        logger.info(f"Retrieved {len(retrieved)} verses above threshold {min_score}")
         return retrieved
 
     def get_context(
@@ -150,7 +165,7 @@ class Retriever:
 
         return "\n".join(context_parts)
 
-    def retrieve_by_tag(self, tag: str, limit: int = 5) -> list[RetrievedVerse]:
+    def retrieve_by_tag(self, tag: str, limit: int = 5) -> List[RetrievedVerse]:
         """
         Retrieve verses by tag/theme.
 
@@ -161,7 +176,9 @@ class Retriever:
         Returns:
             List of verses with matching tag
         """
+        logger.info(f"Retrieving verses by tag: {tag}")
         matching = []
+
         for verse_id, verse_data in self.verses_data.items():
             if tag.lower() in [t.lower() for t in verse_data['tags']]:
                 matching.append(RetrievedVerse(
@@ -174,9 +191,10 @@ class Retriever:
                     score=1.0  # Direct tag match
                 ))
 
+        logger.info(f"Found {len(matching)} verses with tag '{tag}'")
         return matching[:limit]
 
-    def get_all_tags(self) -> list[str]:
+    def get_all_tags(self) -> List[str]:
         """Get all unique tags in the dataset."""
         tags = set()
         for verse_data in self.verses_data.values():

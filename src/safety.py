@@ -1,14 +1,30 @@
 """
 Safety Module for GitaBae.
+
 Handles content moderation, topic filtering, and input sanitization.
+Ensures user safety by redirecting sensitive topics to professionals.
 """
 
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, Dict, List
 
-from .config import get_openai_client, Config
+from .constants import (
+    REDIRECT_MEDICAL,
+    REDIRECT_LEGAL,
+    REDIRECT_FINANCIAL,
+    REDIRECT_POLITICAL,
+    REDIRECT_OFF_TOPIC,
+    MEDICAL_KEYWORDS,
+    LEGAL_KEYWORDS,
+    FINANCIAL_KEYWORDS,
+    POLITICAL_KEYWORDS,
+    OFF_TOPIC_KEYWORDS,
+)
+from .logger import get_safety_logger
+
+logger = get_safety_logger()
 
 
 class SafetyStatus(Enum):
@@ -27,96 +43,56 @@ class SafetyResult:
     original_text: Optional[str] = None
 
 
+# Topic configuration mapping keywords to redirect messages
+REDIRECT_TOPICS: Dict[str, Dict[str, any]] = {
+    "medical": {
+        "keywords": MEDICAL_KEYWORDS,
+        "message": REDIRECT_MEDICAL,
+    },
+    "legal": {
+        "keywords": LEGAL_KEYWORDS,
+        "message": REDIRECT_LEGAL,
+    },
+    "financial": {
+        "keywords": FINANCIAL_KEYWORDS,
+        "message": REDIRECT_FINANCIAL,
+    },
+    "political": {
+        "keywords": POLITICAL_KEYWORDS,
+        "message": REDIRECT_POLITICAL,
+    },
+}
+
+# Content that should be blocked entirely
+BLOCKED_PATTERNS = [
+    r"how to (make|build|create) (a )?(bomb|weapon|explosive)",
+    r"how to (hack|break into|steal)",
+    r"how to (hurt|harm|kill) (someone|people)",
+    r"(child|minor).*(abuse|porn|explicit)",
+]
+
+# Prompt injection patterns to sanitize
+INJECTION_PATTERNS = [
+    r"ignore (previous|above|all) instructions",
+    r"disregard (previous|above|all)",
+    r"forget (everything|all|previous)",
+    r"you are now",
+    r"act as",
+    r"pretend to be",
+    r"system prompt",
+    r"<\|.*?\|>",  # Special tokens
+]
+
+# Maximum input length
+MAX_INPUT_LENGTH = 1000
+
+
 class SafetyChecker:
     """Handles content moderation and topic filtering."""
 
-    # Topics that should be redirected (not blocked, but gently redirected)
-    REDIRECT_TOPICS = {
-        "medical": {
-            "keywords": [
-                "suicide", "kill myself", "want to die", "end my life",
-                "self-harm", "cutting myself", "overdose",
-                "diagnosis", "symptoms", "medication", "prescribe",
-                "doctor", "therapy", "therapist", "psychiatrist",
-                "depression medication", "antidepressant"
-            ],
-            "message": """I hear that you're going through something really difficult. While I can share wisdom from the Gita about inner peace and strength, I'm not qualified to provide medical or mental health advice.
-
-If you're struggling with mental health, please reach out to a professional:
-- **Crisis helpline (India):** iCall - 9152987821
-- **International:** Visit findahelpline.com
-
-You deserve proper support. Would you like to talk about finding inner strength or peace instead?"""
-        },
-        "legal": {
-            "keywords": [
-                "lawsuit", "sue", "legal action", "lawyer", "attorney",
-                "court case", "divorce proceedings", "custody",
-                "criminal", "arrest", "police complaint", "fir"
-            ],
-            "message": """I understand you're facing a challenging legal situation. While the Gita teaches us about dharma (righteous duty), I'm not able to provide legal advice.
-
-For legal matters, please consult a qualified lawyer or legal aid service.
-
-Is there something about dealing with the stress or ethical aspects of your situation I can help with instead?"""
-        },
-        "financial": {
-            "keywords": [
-                "invest", "stock market", "crypto", "bitcoin",
-                "loan", "debt", "bankruptcy", "tax advice",
-                "financial planning", "retirement fund"
-            ],
-            "message": """Financial decisions are important and deserve expert guidance. While the Gita speaks about detachment from material outcomes, I can't provide specific financial advice.
-
-Please consult a financial advisor for investment or money matters.
-
-Would you like to discuss managing stress around financial worries, or finding balance between material and spiritual goals?"""
-        },
-        "political": {
-            "keywords": [
-                "election", "vote for", "political party", "bjp", "congress",
-                "modi", "politician", "government policy", "protest",
-                "left wing", "right wing", "conservative", "liberal"
-            ],
-            "message": """I appreciate your interest, but I try to stay away from political discussions. The Gita's wisdom transcends political boundaries and speaks to universal human experiences.
-
-Is there something about your personal values, duty, or decision-making I can help with instead?"""
-        }
-    }
-
-    # Content that should be blocked entirely
-    BLOCKED_PATTERNS = [
-        r"how to (make|build|create) (a )?(bomb|weapon|explosive)",
-        r"how to (hack|break into|steal)",
-        r"how to (hurt|harm|kill) (someone|people)",
-        r"(child|minor).*(abuse|porn|explicit)",
-    ]
-
-    # Gentle redirects for off-topic but harmless queries
-    OFF_TOPIC_KEYWORDS = [
-        "recipe", "cook", "food", "restaurant",
-        "movie", "film", "tv show", "netflix",
-        "sports", "cricket", "football", "game score",
-        "weather", "temperature",
-        "code", "programming", "python", "javascript",
-        "homework", "assignment", "exam answer"
-    ]
-
-    OFF_TOPIC_MESSAGE = """That's an interesting question, but it's a bit outside my area of wisdom! I'm GitaBae, and I specialize in life guidance based on the Bhagavad Gita.
-
-I can help you with:
-- Career and purpose questions
-- Dealing with anxiety, fear, or stress
-- Relationships and difficult people
-- Decision-making dilemmas
-- Finding inner peace
-
-What's on your mind in these areas?"""
-
     def __init__(self):
         """Initialize safety checker."""
-        Config.load()
-        self.client = get_openai_client()
+        logger.info("SafetyChecker initialized")
 
     def check_input(self, text: str) -> SafetyResult:
         """
@@ -131,8 +107,9 @@ What's on your mind in these areas?"""
         text_lower = text.lower().strip()
 
         # Check for blocked content first
-        for pattern in self.BLOCKED_PATTERNS:
+        for pattern in BLOCKED_PATTERNS:
             if re.search(pattern, text_lower):
+                logger.warning(f"Blocked content detected: {pattern}")
                 return SafetyResult(
                     status=SafetyStatus.BLOCKED,
                     reason="harmful_content",
@@ -140,9 +117,10 @@ What's on your mind in these areas?"""
                 )
 
         # Check redirect topics
-        for topic, config in self.REDIRECT_TOPICS.items():
+        for topic, config in REDIRECT_TOPICS.items():
             for keyword in config["keywords"]:
                 if keyword in text_lower:
+                    logger.info(f"Redirect triggered for topic: {topic}, keyword: {keyword}")
                     return SafetyResult(
                         status=SafetyStatus.REDIRECT,
                         reason=topic,
@@ -151,43 +129,19 @@ What's on your mind in these areas?"""
                     )
 
         # Check off-topic queries
-        for keyword in self.OFF_TOPIC_KEYWORDS:
+        for keyword in OFF_TOPIC_KEYWORDS:
             if keyword in text_lower:
+                logger.info(f"Off-topic query detected: {keyword}")
                 return SafetyResult(
                     status=SafetyStatus.REDIRECT,
                     reason="off_topic",
-                    redirect_message=self.OFF_TOPIC_MESSAGE,
+                    redirect_message=REDIRECT_OFF_TOPIC,
                     original_text=text
                 )
 
-        # Use OpenAI moderation API for additional checks
-        moderation_result = self._check_moderation(text)
-        if moderation_result:
-            return moderation_result
-
         # All checks passed
+        logger.debug("Input passed all safety checks")
         return SafetyResult(status=SafetyStatus.SAFE, original_text=text)
-
-    def _check_moderation(self, text: str) -> Optional[SafetyResult]:
-        """
-        Check text using OpenAI's moderation API.
-
-        Args:
-            text: Text to check
-
-        Returns:
-            SafetyResult if flagged, None if safe
-        """
-        try:
-            # Note: OpenRouter may not support moderation endpoint directly
-            # This is a placeholder - in production, use OpenAI directly for moderation
-            # For now, we rely on keyword-based filtering
-            pass
-        except Exception:
-            # If moderation fails, allow through (fail open)
-            pass
-
-        return None
 
     def check_output(self, text: str) -> SafetyResult:
         """
@@ -202,8 +156,9 @@ What's on your mind in these areas?"""
         text_lower = text.lower()
 
         # Check for blocked content in output
-        for pattern in self.BLOCKED_PATTERNS:
+        for pattern in BLOCKED_PATTERNS:
             if re.search(pattern, text_lower):
+                logger.warning(f"Blocked content in output: {pattern}")
                 return SafetyResult(
                     status=SafetyStatus.BLOCKED,
                     reason="harmful_output",
@@ -226,24 +181,16 @@ What's on your mind in these areas?"""
         text = " ".join(text.split())
 
         # Limit length
-        max_length = 1000
-        if len(text) > max_length:
-            text = text[:max_length] + "..."
+        if len(text) > MAX_INPUT_LENGTH:
+            logger.info(f"Input truncated from {len(text)} to {MAX_INPUT_LENGTH} chars")
+            text = text[:MAX_INPUT_LENGTH] + "..."
 
         # Remove potential prompt injection attempts
-        injection_patterns = [
-            r"ignore (previous|above|all) instructions",
-            r"disregard (previous|above|all)",
-            r"forget (everything|all|previous)",
-            r"you are now",
-            r"act as",
-            r"pretend to be",
-            r"system prompt",
-            r"<\|.*?\|>",  # Special tokens
-        ]
-
-        for pattern in injection_patterns:
+        for pattern in INJECTION_PATTERNS:
+            original_text = text
             text = re.sub(pattern, "[removed]", text, flags=re.IGNORECASE)
+            if text != original_text:
+                logger.warning(f"Prompt injection attempt removed: {pattern}")
 
         return text.strip()
 
