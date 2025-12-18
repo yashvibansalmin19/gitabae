@@ -5,6 +5,10 @@ python-dotenv>=1.0.0
 openai>=1.0.0
 pinecone>=5.0.0
 
+# LangChain for conversation memory
+langchain>=0.1.0
+langchain-openai>=0.0.5
+
 # UI
 streamlit>=1.28.0
 
